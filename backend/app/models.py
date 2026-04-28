@@ -70,3 +70,12 @@ class WeeklyReportResponse(BaseModel):
     period_end: str
     report_markdown: str
     totals: dict
+
+
+class CatalogService(BaseModel):
+    name: str
+    url: str
+
+
+class CatalogServicesResponse(BaseModel):
+    services: list[CatalogService]

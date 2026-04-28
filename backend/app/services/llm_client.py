@@ -3,10 +3,20 @@ from __future__ import annotations
 from openai import OpenAI
 
 from ..config import settings
+from .service_catalog import catalog_has_any
+
+
+def _lenai_available_by_catalog() -> bool:
+    return catalog_has_any(["lenai", "openai"])
 
 
 def has_llm_config() -> bool:
-    if settings.lenai_api_base_url and settings.lenai_api_key and settings.lenai_model:
+    if (
+        settings.lenai_api_base_url
+        and settings.lenai_api_key
+        and settings.lenai_model
+        and _lenai_available_by_catalog()
+    ):
         return True
     if settings.openai_api_key and settings.openai_model:
         return True
@@ -14,7 +24,7 @@ def has_llm_config() -> bool:
 
 
 def _build_openai_client() -> OpenAI:
-    if settings.lenai_api_base_url and settings.lenai_api_key:
+    if settings.lenai_api_base_url and settings.lenai_api_key and _lenai_available_by_catalog():
         return OpenAI(
             api_key=settings.lenai_api_key,
             base_url=settings.lenai_api_base_url,
@@ -23,7 +33,7 @@ def _build_openai_client() -> OpenAI:
 
 
 def _resolve_model() -> str:
-    if settings.lenai_model:
+    if settings.lenai_model and _lenai_available_by_catalog():
         return settings.lenai_model
     return settings.openai_model
 

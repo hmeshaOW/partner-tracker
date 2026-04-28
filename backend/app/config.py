@@ -8,6 +8,11 @@ class Settings(BaseModel):
     lenai_api_base_url: str = os.getenv("LENAI_API_BASE_URL", "")
     lenai_api_key: str = os.getenv("LENAI_API_KEY", "")
     lenai_model: str = os.getenv("LENAI_MODEL", "")
+    service_catalog_url: str = os.getenv(
+        "SERVICE_CATALOG_URL",
+        "https://mmcglobal.sharepoint.com/sites/EnterpriseArchitecture/SitePages/Core-APIs-and-Innovation(1).aspx",
+    )
+    service_catalog_bearer_token: str = os.getenv("SERVICE_CATALOG_BEARER_TOKEN", "")
     graph_base_url: str = "https://graph.microsoft.com/v1.0"
     opportunities_workbook_path: str = os.getenv(
         "OPPORTUNITIES_WORKBOOK_PATH",

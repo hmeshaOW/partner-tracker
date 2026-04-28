@@ -69,12 +69,22 @@ Backend `.env` values:
 
 - `OPENAI_API_KEY` and `OPENAI_MODEL` for direct OpenAI usage
 - `LENAI_API_BASE_URL`, `LENAI_API_KEY`, and `LENAI_MODEL` for LenAI/OpenAI-compatible internal API routing
+- `SERVICE_CATALOG_URL` and optional `SERVICE_CATALOG_BEARER_TOKEN` for the Core APIs catalog lookup
 - `OPPORTUNITIES_WORKBOOK_PATH` to point at the Excel opportunity register
 
 LLM routing precedence:
 
-1. If `LENAI_API_BASE_URL`, `LENAI_API_KEY`, and `LENAI_MODEL` are set, backend agents use LenAI endpoint.
+1. Backend first queries `SERVICE_CATALOG_URL` and checks for LenAI/OpenAI service availability.
+2. If `LENAI_API_BASE_URL`, `LENAI_API_KEY`, and `LENAI_MODEL` are set and catalog indicates service availability, backend agents use LenAI endpoint.
 2. Otherwise, backend falls back to direct OpenAI via `OPENAI_API_KEY` and `OPENAI_MODEL`.
+
+Graph routing behavior:
+
+- Backend Graph client checks catalog entries and uses discovered Graph endpoint URLs when available, otherwise defaults to `https://graph.microsoft.com/v1.0`.
+
+Catalog visibility endpoint:
+
+- `GET /api/catalog/services` returns currently discovered service entries from the configured catalog source.
 
 ## Microsoft Graph Access
 

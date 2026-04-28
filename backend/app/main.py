@@ -4,6 +4,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from .models import (
+    CatalogServicesResponse,
     OpportunityListResponse,
     SyncRequest,
     SyncResponse,
@@ -15,6 +16,7 @@ from .services.storage import read_activities
 from .services.intelligence_pipeline import infer_from_events, infer_from_messages
 from .agents.report_agent import generate_weekly_report
 from .services.workbook_loader import build_opportunity_summary, load_opportunities
+from .services.service_catalog import get_catalog_services
 
 
 app = FastAPI(title="Partner Tracker API", version="0.1.0")
@@ -54,6 +56,11 @@ async def list_opportunities() -> OpportunityListResponse:
         opportunities=opportunities,
         summary=build_opportunity_summary(opportunities),
     )
+
+
+@app.get("/api/catalog/services")
+async def list_catalog_services() -> CatalogServicesResponse:
+    return CatalogServicesResponse(services=get_catalog_services())
 
 
 @app.post("/api/reports/weekly")
