@@ -1,0 +1,41 @@
+from __future__ import annotations
+
+import httpx
+from . import storage
+from ..config import settings
+
+
+class GraphClient:
+    def __init__(self, access_token: str):
+        self.access_token = access_token
+
+    @property
+    def headers(self) -> dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self.access_token}",
+            "Accept": "application/json"
+        }
+
+    async def fetch_messages(self, limit: int = 50) -> list[dict]:
+        url = (
+            f"{settings.graph_base_url}/me/messages"
+            f"?$top={limit}&$select=id,subject,bodyPreview,receivedDateTime,from,toRecipients"
+        )
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.get(url, headers=self.headers)
+            response.raise_for_status()
+            return response.json().get("value", [])
+
+    async def fetch_events(self, limit: int = 30) -> list[dict]:
+        url = (
+            f"{settings.graph_base_url}/me/events"
+            f"?$top={limit}&$select=id,subject,bodyPreview,start,end,organizer,attendees"
+        )
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.get(url, headers=self.headers)
+            response.raise_for_status()
+            return response.json().get("value", [])
+
+
+def save_inferred(activities: list[dict]) -> None:
+    storage.write_activities(activities)
