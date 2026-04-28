@@ -63,7 +63,19 @@ export default function App() {
     setStatus("syncing");
     setError("");
     try {
-      const result = await syncMailboxAndCalendar(accessToken);
+      let token = accessToken;
+      if (!token && hasMicrosoftLoginConfig()) {
+        const login = await loginAndAcquireGraphToken();
+        token = login.accessToken;
+        setAccessToken(token);
+        setAccountName(login.accountName);
+      }
+
+      if (!token) {
+        throw new Error("Microsoft login configuration is required to acquire an access token at runtime.");
+      }
+
+      const result = await syncMailboxAndCalendar(token);
       setActivities(result.inferred_activities);
       setStatus("synced");
     } catch (e) {
@@ -85,17 +97,6 @@ export default function App() {
     }
   }
 
-  async function handleMicrosoftLogin() {
-    setError("");
-    try {
-      const result = await loginAndAcquireGraphToken();
-      setAccessToken(result.accessToken);
-      setAccountName(result.accountName);
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
-
   const topStageEntries = Object.entries(opportunitySummary.by_stage).sort((a, b) => b[1] - a[1]);
 
   return (
@@ -109,11 +110,8 @@ export default function App() {
           <h2>Business Development Dashboard</h2>
           <p>AI-assisted weekly non-billable activity intelligence for OW leadership reporting.</p>
           <div className="actions">
-            {hasMicrosoftLoginConfig() ? (
-              <button onClick={handleMicrosoftLogin}>Sign in with Microsoft</button>
-            ) : null}
             <button onClick={checkBackend}>Check Backend</button>
-            <button onClick={handleSync} disabled={!accessToken || status === "syncing"}>
+            <button onClick={handleSync} disabled={status === "syncing"}>
               {status === "syncing" ? "Syncing..." : "Sync Email + Calendar"}
             </button>
             <button onClick={handleReport} disabled={activities.length === 0 || status === "reporting"}>
@@ -121,17 +119,7 @@ export default function App() {
             </button>
           </div>
           <div className="account-row">
-            <span>{accountName ? `Signed in as ${accountName}` : "Use Microsoft sign-in or paste a delegated token."}</span>
-          </div>
-          <div className="token-row">
-            <label htmlFor="token">Microsoft Graph Access Token</label>
-            <input
-              id="token"
-              type="password"
-              placeholder="Paste delegated Graph token"
-              value={accessToken}
-              onChange={(e) => setAccessToken(e.target.value)}
-            />
+            <span>{accountName ? `Signed in as ${accountName}` : "Sync will prompt Microsoft login at runtime."}</span>
           </div>
           <div className="status-row">
             <span>Backend: {backendStatus}</span>
