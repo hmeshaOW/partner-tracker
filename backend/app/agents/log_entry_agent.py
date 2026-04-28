@@ -3,9 +3,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from openai import OpenAI
-
 from ..config import settings
+from ..services.llm_client import chat_json, has_llm_config
 from .domain_agent import classify_domain
 from .relationship_agent import classify_relationship
 
@@ -72,7 +71,6 @@ def _fallback_extract(item: dict[str, Any], opportunities: list[dict[str, Any]])
 
 
 def _extract_with_llm(items: list[dict[str, Any]], opportunities: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    client = OpenAI(api_key=settings.openai_api_key)
     opportunity_context = [
         {
             "opportunity_id": opp.get("opportunity_id"),
@@ -85,29 +83,24 @@ def _extract_with_llm(items: list[dict[str, Any]], opportunities: list[dict[str,
         for opp in opportunities[:50]
     ]
 
-    response = client.chat.completions.create(
-        model=settings.openai_model,
-        response_format={"type": "json_object"},
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
+    payload_text = chat_json(
+        SYSTEM_PROMPT,
+        json.dumps(
             {
-                "role": "user",
-                "content": json.dumps({
-                    "opportunities": opportunity_context,
-                    "items": items,
-                }, default=str),
+                "opportunities": opportunity_context,
+                "items": items,
             },
-        ],
+            default=str,
+        ),
     )
-
-    payload = json.loads(response.choices[0].message.content or "{}")
+    payload = json.loads(payload_text or "{}")
     return payload.get("entries", [])
 
 
 def extract_log_entries(items: list[dict[str, Any]], opportunities: list[dict[str, Any]]) -> list[dict[str, Any]]:
     if not items:
         return []
-    if settings.openai_api_key:
+    if has_llm_config():
         try:
             llm_entries = _extract_with_llm(items, opportunities)
             if llm_entries:

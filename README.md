@@ -65,6 +65,17 @@ uvicorn app.main:app --reload --port 8000
 
 Backend runs on `http://localhost:8000`.
 
+Backend `.env` values:
+
+- `OPENAI_API_KEY` and `OPENAI_MODEL` for direct OpenAI usage
+- `LENAI_API_BASE_URL`, `LENAI_API_KEY`, and `LENAI_MODEL` for LenAI/OpenAI-compatible internal API routing
+- `OPPORTUNITIES_WORKBOOK_PATH` to point at the Excel opportunity register
+
+LLM routing precedence:
+
+1. If `LENAI_API_BASE_URL`, `LENAI_API_KEY`, and `LENAI_MODEL` are set, backend agents use LenAI endpoint.
+2. Otherwise, backend falls back to direct OpenAI via `OPENAI_API_KEY` and `OPENAI_MODEL`.
+
 ## Microsoft Graph Access
 
 Provide a delegated Graph access token in the frontend input field before syncing.

@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from collections import Counter
-from datetime import datetime
-from openai import OpenAI
-from ..config import settings
+
+from ..services.llm_client import chat_text, has_llm_config
 
 
 def _fallback_report(items: list[dict], period_start: str, period_end: str) -> str:
@@ -34,10 +33,9 @@ def _fallback_report(items: list[dict], period_start: str, period_end: str) -> s
 
 
 def generate_weekly_report(items: list[dict], opportunities: list[dict], period_start: str, period_end: str) -> str:
-    if not settings.openai_api_key:
+    if not has_llm_config():
         return _fallback_report(items, period_start, period_end)
 
-    client = OpenAI(api_key=settings.openai_api_key)
     prompt = (
         "You are a senior Oliver Wyman BD chief of staff. Generate a concise weekly leadership update with these exact sections:\n"
         "1. EXECUTIVE SUMMARY\n2. KEY WINS & MOMENTUM\n3. PIPELINE HEALTH\n4. PRIORITY ACTIONS\n5. RISKS & WATCH ITEMS\n"
@@ -47,8 +45,5 @@ def generate_weekly_report(items: list[dict], opportunities: list[dict], period_
         "Style: factual, executive, no fluff."
     )
 
-    result = client.responses.create(
-        model=settings.openai_model,
-        input=prompt
-    )
-    return result.output_text if result.output_text else _fallback_report(items, period_start, period_end)
+    result = chat_text(prompt)
+    return result if result else _fallback_report(items, period_start, period_end)
