@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { generateWeeklyReport, getOpportunities, healthCheck, syncMailboxAndCalendar } from "./api";
+import {
+  generateWeeklyReport,
+  getMicrosoftAuthConfig,
+  getOpportunities,
+  healthCheck,
+  syncMailboxAndCalendar,
+} from "./api";
 import { hasMicrosoftLoginConfig, loginAndAcquireGraphToken, type MicrosoftAuthRuntimeConfig } from "./auth";
 import type { InferredActivity, OpportunityRecord, OpportunitySummary } from "./types";
 
@@ -32,33 +38,71 @@ export default function App() {
   });
   const [report, setReport] = useState("");
   const [error, setError] = useState("");
-  const [authDialogOpen, setAuthDialogOpen] = useState(false);
-  const [authConfig, setAuthConfig] = useState<MicrosoftAuthRuntimeConfig>(() => {
+  const [runtimeAuthConfig, setRuntimeAuthConfig] = useState<MicrosoftAuthRuntimeConfig | undefined>(() => {
     const fromStorage = window.localStorage.getItem(AUTH_CONFIG_KEY);
-    if (fromStorage) {
-      try {
-        return JSON.parse(fromStorage) as MicrosoftAuthRuntimeConfig;
-      } catch {
-        return {
-          clientId: "",
-          tenantId: "common",
-          redirectUri: window.location.origin,
-        };
-      }
+    if (!fromStorage) {
+      return undefined;
     }
-    return {
+
+    try {
+      return JSON.parse(fromStorage) as MicrosoftAuthRuntimeConfig;
+    } catch {
+      return undefined;
+    }
+  });
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [showSetup, setShowSetup] = useState(false);
+  const [setupConfig, setSetupConfig] = useState<MicrosoftAuthRuntimeConfig>(
+    runtimeAuthConfig || {
       clientId: "",
       tenantId: "common",
       redirectUri: window.location.origin,
-    };
-  });
+    }
+  );
 
   const week = useMemo(() => getWeekRange(), []);
+  const isAuthenticated = Boolean(accessToken && accountName);
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      return;
+    }
+
     void checkBackend();
     void loadOpportunities();
-  }, []);
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (hasMicrosoftLoginConfig(runtimeAuthConfig)) {
+      return;
+    }
+
+    let active = true;
+    void (async () => {
+      try {
+        const config = await getMicrosoftAuthConfig();
+        if (!config.client_id || !active) {
+          return;
+        }
+
+        const resolved: MicrosoftAuthRuntimeConfig = {
+          clientId: config.client_id,
+          tenantId: (config.tenant_id || "common").trim(),
+          redirectUri: (config.redirect_uri || window.location.origin).trim(),
+        };
+
+        setRuntimeAuthConfig(resolved);
+        window.localStorage.setItem(AUTH_CONFIG_KEY, JSON.stringify(resolved));
+      } catch {
+        // Ignore auto-config failures and keep existing manual/env behavior.
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [runtimeAuthConfig]);
 
   async function loadOpportunities() {
     try {
@@ -86,17 +130,18 @@ export default function App() {
     setError("");
     try {
       let token = accessToken;
-      const canLogin = hasMicrosoftLoginConfig(authConfig);
+      const canLogin = hasMicrosoftLoginConfig(runtimeAuthConfig);
       if (!token && canLogin) {
-        const login = await loginAndAcquireGraphToken(authConfig);
+        const login = await loginAndAcquireGraphToken(runtimeAuthConfig, {
+          loginHint: username,
+        });
         token = login.accessToken;
         setAccessToken(token);
         setAccountName(login.accountName);
       }
 
       if (!token) {
-        setAuthDialogOpen(true);
-        throw new Error("Provide Microsoft app settings, then retry Sync to sign in and acquire token.");
+        throw new Error("Sign in first to sync mailbox and calendar.");
       }
 
       const result = await syncMailboxAndCalendar(token);
@@ -110,12 +155,23 @@ export default function App() {
 
   async function handleRuntimeLogin() {
     setError("");
-    window.localStorage.setItem(AUTH_CONFIG_KEY, JSON.stringify(authConfig));
+    if (!username.trim() || !password) {
+      setError("Enter your Office 365 username and password.");
+      return;
+    }
+
+    if (!hasMicrosoftLoginConfig(runtimeAuthConfig)) {
+      setError("Microsoft login is not configured yet. Ensure backend or frontend Entra client ID is set, then reload.");
+      return;
+    }
+
     try {
-      const result = await loginAndAcquireGraphToken(authConfig);
+      const result = await loginAndAcquireGraphToken(runtimeAuthConfig, {
+        loginHint: username,
+      });
       setAccessToken(result.accessToken);
       setAccountName(result.accountName);
-      setAuthDialogOpen(false);
+      setPassword("");
     } catch (e) {
       setError((e as Error).message);
     }
@@ -136,6 +192,96 @@ export default function App() {
 
   const topStageEntries = Object.entries(opportunitySummary.by_stage).sort((a, b) => b[1] - a[1]);
 
+  if (!isAuthenticated) {
+    return (
+      <div className="login-shell">
+        <section className="login-card">
+          <h1>BD Command</h1>
+          <p className="login-tag">Partner Tracker</p>
+          {showSetup ? (
+            <>
+              <h2>Setup Microsoft Login</h2>
+              <p className="subtle">
+                Enter your Entra app registration details to enable Microsoft login.
+              </p>
+              <div className="token-row">
+                <label>Client ID</label>
+                <input
+                  value={setupConfig.clientId || ""}
+                  onChange={(e) =>
+                    setSetupConfig((prev) => ({ ...prev, clientId: e.target.value }))
+                  }
+                  placeholder="Your OW Entra app client id"
+                />
+                <label>Tenant ID (or common)</label>
+                <input
+                  value={setupConfig.tenantId || "common"}
+                  onChange={(e) =>
+                    setSetupConfig((prev) => ({ ...prev, tenantId: e.target.value }))
+                  }
+                  placeholder="Your tenant id"
+                />
+                <label>Redirect URI</label>
+                <input
+                  value={setupConfig.redirectUri || window.location.origin}
+                  onChange={(e) =>
+                    setSetupConfig((prev) => ({
+                      ...prev,
+                      redirectUri: e.target.value,
+                    }))
+                  }
+                  placeholder={window.location.origin}
+                />
+                <div className="actions">
+                  <button
+                    onClick={() => {
+                      setRuntimeAuthConfig(setupConfig);
+                      window.localStorage.setItem(
+                        AUTH_CONFIG_KEY,
+                        JSON.stringify(setupConfig)
+                      );
+                      setShowSetup(false);
+                    }}
+                  >
+                    Save Settings
+                  </button>
+                  <button onClick={() => setShowSetup(false)}>Cancel</button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <h2>Sign in before entering the dashboard</h2>
+              <p className="subtle">
+                Sign in with your Office 365 credentials to access email, calendar, and OW-integrated services.
+              </p>
+              <div className="token-row">
+                <label>Username</label>
+                <input
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="name@oliverwyman.com"
+                />
+                <label>Password</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Password"
+                />
+                <div className="actions">
+                  <button onClick={handleRuntimeLogin}>Log in</button>
+                  <button onClick={() => setShowSetup(true)}>Setup</button>
+                </div>
+              </div>
+            </>
+          )}
+          {error ? <div className="error">{error}</div> : null}
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -151,7 +297,6 @@ export default function App() {
             <button onClick={handleSync} disabled={status === "syncing"}>
               {status === "syncing" ? "Syncing..." : "Sync Email + Calendar"}
             </button>
-            <button onClick={() => setAuthDialogOpen(true)}>Microsoft Login</button>
             <button onClick={handleReport} disabled={activities.length === 0 || status === "reporting"}>
               {status === "reporting" ? "Generating..." : "Generate Weekly Report"}
             </button>
@@ -264,37 +409,6 @@ export default function App() {
           <h3>Weekly Leadership Draft</h3>
           <pre>{report || "Generate a report to view weekly summary."}</pre>
         </section>
-
-        {authDialogOpen ? (
-          <section className="panel">
-            <h3>Microsoft Login Setup</h3>
-            <p className="subtle">Provide Entra app settings once, then click Sign in to acquire a delegated Graph token at runtime.</p>
-            <div className="token-row">
-              <label>Client ID</label>
-              <input
-                value={authConfig.clientId || ""}
-                onChange={(e) => setAuthConfig((prev) => ({ ...prev, clientId: e.target.value }))}
-                placeholder="OW Entra app client id"
-              />
-              <label>Tenant ID (or common)</label>
-              <input
-                value={authConfig.tenantId || "common"}
-                onChange={(e) => setAuthConfig((prev) => ({ ...prev, tenantId: e.target.value }))}
-                placeholder="OW tenant id"
-              />
-              <label>Redirect URI</label>
-              <input
-                value={authConfig.redirectUri || window.location.origin}
-                onChange={(e) => setAuthConfig((prev) => ({ ...prev, redirectUri: e.target.value }))}
-                placeholder={window.location.origin}
-              />
-              <div className="actions">
-                <button onClick={handleRuntimeLogin}>Sign in and acquire token</button>
-                <button onClick={() => setAuthDialogOpen(false)}>Close</button>
-              </div>
-            </div>
-          </section>
-        ) : null}
       </main>
     </div>
   );
