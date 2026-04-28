@@ -33,7 +33,7 @@ def _fallback_report(items: list[dict], period_start: str, period_end: str) -> s
     )
 
 
-def generate_weekly_report(items: list[dict], period_start: str, period_end: str) -> str:
+def generate_weekly_report(items: list[dict], opportunities: list[dict], period_start: str, period_end: str) -> str:
     if not settings.openai_api_key:
         return _fallback_report(items, period_start, period_end)
 
@@ -43,6 +43,7 @@ def generate_weekly_report(items: list[dict], period_start: str, period_end: str
         "1. EXECUTIVE SUMMARY\n2. KEY WINS & MOMENTUM\n3. PIPELINE HEALTH\n4. PRIORITY ACTIONS\n5. RISKS & WATCH ITEMS\n"
         f"Period: {period_start} to {period_end}\n"
         f"Activities: {items}\n"
+        f"Opportunities: {opportunities[:25]}\n"
         "Style: factual, executive, no fluff."
     )
 

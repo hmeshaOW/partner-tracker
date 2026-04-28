@@ -1,4 +1,4 @@
-import type { SyncResponse, WeeklyReportResponse } from "./types";
+import type { OpportunityListResponse, SyncResponse, WeeklyReportResponse } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
@@ -38,4 +38,8 @@ export function generateWeeklyReport(startDate: string, endDate: string) {
       period_end: endDate
     })
   });
+}
+
+export function getOpportunities() {
+  return api<OpportunityListResponse>("/api/opportunities");
 }

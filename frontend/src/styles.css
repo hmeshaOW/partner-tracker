@@ -52,6 +52,39 @@ body {
   gap: 18px;
 }
 
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.kpi-card {
+  background: color-mix(in srgb, var(--panel) 92%, black);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 18px;
+  display: grid;
+  gap: 8px;
+}
+
+.kpi-card strong {
+  font-family: "Cormorant Garamond", serif;
+  font-size: 30px;
+}
+
+.kpi-label {
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.two-column {
+  display: grid;
+  grid-template-columns: 1.7fr 1fr;
+  gap: 18px;
+}
+
 .hero,
 .panel {
   background: color-mix(in srgb, var(--panel) 92%, black);
@@ -98,6 +131,12 @@ button:disabled {
   gap: 6px;
 }
 
+.account-row {
+  color: var(--muted);
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+
 input {
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -139,6 +178,27 @@ th {
   font-size: 12px;
 }
 
+.stage-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.stage-list li {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 8px;
+}
+
+.subtle {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 6px;
+}
+
 .report pre {
   white-space: pre-wrap;
   margin: 0;
@@ -148,6 +208,11 @@ th {
 
 @media (max-width: 900px) {
   .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .kpi-grid,
+  .two-column {
     grid-template-columns: 1fr;
   }
 

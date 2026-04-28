@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
-import { generateWeeklyReport, healthCheck, syncMailboxAndCalendar } from "./api";
-import type { InferredActivity } from "./types";
+import { useEffect, useMemo, useState } from "react";
+import { generateWeeklyReport, getOpportunities, healthCheck, syncMailboxAndCalendar } from "./api";
+import { hasMicrosoftLoginConfig, loginAndAcquireGraphToken } from "./auth";
+import type { InferredActivity, OpportunityRecord, OpportunitySummary } from "./types";
 
 function getWeekRange() {
   const now = new Date();
@@ -15,13 +16,37 @@ function getWeekRange() {
 
 export default function App() {
   const [accessToken, setAccessToken] = useState("");
+  const [accountName, setAccountName] = useState("");
   const [status, setStatus] = useState("idle");
   const [backendStatus, setBackendStatus] = useState("unknown");
   const [activities, setActivities] = useState<InferredActivity[]>([]);
+  const [opportunities, setOpportunities] = useState<OpportunityRecord[]>([]);
+  const [opportunitySummary, setOpportunitySummary] = useState<OpportunitySummary>({
+    count: 0,
+    core_pursuits: 0,
+    total_fees_usd: 0,
+    weighted_fees_usd: 0,
+    by_stage: {}
+  });
   const [report, setReport] = useState("");
   const [error, setError] = useState("");
 
   const week = useMemo(() => getWeekRange(), []);
+
+  useEffect(() => {
+    void checkBackend();
+    void loadOpportunities();
+  }, []);
+
+  async function loadOpportunities() {
+    try {
+      const result = await getOpportunities();
+      setOpportunities(result.opportunities);
+      setOpportunitySummary(result.summary);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
 
   async function checkBackend() {
     setError("");
@@ -60,6 +85,19 @@ export default function App() {
     }
   }
 
+  async function handleMicrosoftLogin() {
+    setError("");
+    try {
+      const result = await loginAndAcquireGraphToken();
+      setAccessToken(result.accessToken);
+      setAccountName(result.accountName);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  const topStageEntries = Object.entries(opportunitySummary.by_stage).sort((a, b) => b[1] - a[1]);
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -71,6 +109,9 @@ export default function App() {
           <h2>Business Development Dashboard</h2>
           <p>AI-assisted weekly non-billable activity intelligence for OW leadership reporting.</p>
           <div className="actions">
+            {hasMicrosoftLoginConfig() ? (
+              <button onClick={handleMicrosoftLogin}>Sign in with Microsoft</button>
+            ) : null}
             <button onClick={checkBackend}>Check Backend</button>
             <button onClick={handleSync} disabled={!accessToken || status === "syncing"}>
               {status === "syncing" ? "Syncing..." : "Sync Email + Calendar"}
@@ -78,6 +119,9 @@ export default function App() {
             <button onClick={handleReport} disabled={activities.length === 0 || status === "reporting"}>
               {status === "reporting" ? "Generating..." : "Generate Weekly Report"}
             </button>
+          </div>
+          <div className="account-row">
+            <span>{accountName ? `Signed in as ${accountName}` : "Use Microsoft sign-in or paste a delegated token."}</span>
           </div>
           <div className="token-row">
             <label htmlFor="token">Microsoft Graph Access Token</label>
@@ -96,16 +140,76 @@ export default function App() {
           {error ? <div className="error">{error}</div> : null}
         </header>
 
+        <section className="kpi-grid">
+          <article className="kpi-card">
+            <span className="kpi-label">Workbook Opportunities</span>
+            <strong>{opportunitySummary.count}</strong>
+          </article>
+          <article className="kpi-card">
+            <span className="kpi-label">Core Pursuits</span>
+            <strong>{opportunitySummary.core_pursuits}</strong>
+          </article>
+          <article className="kpi-card">
+            <span className="kpi-label">Fees USD</span>
+            <strong>{currency(opportunitySummary.total_fees_usd)}</strong>
+          </article>
+          <article className="kpi-card">
+            <span className="kpi-label">Weighted Fees</span>
+            <strong>{currency(opportunitySummary.weighted_fees_usd)}</strong>
+          </article>
+        </section>
+
+        <section className="two-column">
+          <section className="panel">
+            <h3>Opportunity Register</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Client</th>
+                  <th>Opportunity</th>
+                  <th>Stage</th>
+                  <th>BFF Status</th>
+                  <th>Fees USD</th>
+                </tr>
+              </thead>
+              <tbody>
+                {opportunities.slice(0, 10).map((item) => (
+                  <tr key={item.opportunity_id}>
+                    <td>{item.client}</td>
+                    <td>{item.opportunity_name}</td>
+                    <td>{item.stage || ""}</td>
+                    <td>{item.bff_status || ""}</td>
+                    <td>{currency(item.fees_value_usd || 0)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+
+          <section className="panel">
+            <h3>Stage Mix</h3>
+            <ul className="stage-list">
+              {topStageEntries.map(([stage, count]) => (
+                <li key={stage}>
+                  <span>{stage}</span>
+                  <strong>{count}</strong>
+                </li>
+              ))}
+            </ul>
+          </section>
+        </section>
+
         <section className="panel">
-          <h3>Inferred Activities</h3>
+          <h3>LLM-Extracted Log Entries</h3>
           <table>
             <thead>
               <tr>
                 <th>Date</th>
                 <th>Source</th>
+                <th>Client</th>
                 <th>Contact</th>
                 <th>Domain</th>
-                <th>BFF / External</th>
+                <th>Stage Hint</th>
                 <th>Summary</th>
               </tr>
             </thead>
@@ -114,15 +218,16 @@ export default function App() {
                 <tr key={item.id}>
                   <td>{item.date}</td>
                   <td>{item.source}</td>
+                  <td>{item.client}</td>
                   <td>{item.contact}</td>
                   <td>{item.domain}</td>
-                  <td>{item.is_bff ? "BFF" : ""}{item.is_bff && item.is_external ? " + " : ""}{item.is_external ? "External" : ""}</td>
-                  <td>{item.summary}</td>
+                  <td>{item.stage_hint}</td>
+                  <td>{item.summary}<div className="subtle">{item.next_step}</div></td>
                 </tr>
               ))}
               {activities.length === 0 ? (
                 <tr>
-                  <td colSpan={6}>No synced activities yet.</td>
+                  <td colSpan={7}>No synced activities yet.</td>
                 </tr>
               ) : null}
             </tbody>
@@ -136,4 +241,13 @@ export default function App() {
       </main>
     </div>
   );
+}
+
+function currency(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    notation: value >= 1_000_000 ? "compact" : "standard",
+    maximumFractionDigits: 1,
+  }).format(value);
 }

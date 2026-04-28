@@ -19,7 +19,7 @@ class GraphClient:
     async def fetch_messages(self, limit: int = 50) -> list[dict]:
         url = (
             f"{settings.graph_base_url}/me/messages"
-            f"?$top={limit}&$select=id,subject,bodyPreview,receivedDateTime,from,toRecipients"
+            f"?$top={limit}&$select=id,subject,bodyPreview,body,receivedDateTime,from,toRecipients,ccRecipients,conversationId"
         )
         async with httpx.AsyncClient(timeout=20) as client:
             response = await client.get(url, headers=self.headers)
@@ -29,7 +29,7 @@ class GraphClient:
     async def fetch_events(self, limit: int = 30) -> list[dict]:
         url = (
             f"{settings.graph_base_url}/me/events"
-            f"?$top={limit}&$select=id,subject,bodyPreview,start,end,organizer,attendees"
+            f"?$top={limit}&$select=id,subject,bodyPreview,body,start,end,organizer,attendees,location,onlineMeetingUrl"
         )
         async with httpx.AsyncClient(timeout=20) as client:
             response = await client.get(url, headers=self.headers)
