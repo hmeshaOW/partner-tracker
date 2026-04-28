@@ -1,18 +1,34 @@
 import { PublicClientApplication } from "@azure/msal-browser";
 
-const clientId = import.meta.env.VITE_ENTRA_CLIENT_ID;
-const tenantId = import.meta.env.VITE_ENTRA_TENANT_ID || "common";
-const redirectUri = import.meta.env.VITE_ENTRA_REDIRECT_URI || window.location.origin;
+const envClientId = import.meta.env.VITE_ENTRA_CLIENT_ID;
+const envTenantId = import.meta.env.VITE_ENTRA_TENANT_ID || "common";
+const envRedirectUri = import.meta.env.VITE_ENTRA_REDIRECT_URI || window.location.origin;
 const scopes = ["User.Read", "Mail.Read", "Calendars.Read"];
 
 let msalInstance: PublicClientApplication | null = null;
+let msalConfigFingerprint = "";
 
-function getInstance() {
+export interface MicrosoftAuthRuntimeConfig {
+  clientId: string;
+  tenantId?: string;
+  redirectUri?: string;
+}
+
+function resolveConfig(runtimeConfig?: MicrosoftAuthRuntimeConfig) {
+  const clientId = (runtimeConfig?.clientId || envClientId || "").trim();
+  const tenantId = (runtimeConfig?.tenantId || envTenantId || "common").trim();
+  const redirectUri = (runtimeConfig?.redirectUri || envRedirectUri || window.location.origin).trim();
+  return { clientId, tenantId, redirectUri };
+}
+
+function getInstance(runtimeConfig?: MicrosoftAuthRuntimeConfig) {
+  const { clientId, tenantId, redirectUri } = resolveConfig(runtimeConfig);
   if (!clientId) {
-    throw new Error("Missing VITE_ENTRA_CLIENT_ID. Configure frontend Entra settings to use Microsoft login.");
+    throw new Error("Missing Microsoft Client ID. Provide Entra app settings in the runtime login prompt.");
   }
 
-  if (!msalInstance) {
+  const fingerprint = `${clientId}|${tenantId}|${redirectUri}`;
+  if (!msalInstance || msalConfigFingerprint !== fingerprint) {
     msalInstance = new PublicClientApplication({
       auth: {
         clientId,
@@ -23,17 +39,18 @@ function getInstance() {
         cacheLocation: "sessionStorage",
       },
     });
+    msalConfigFingerprint = fingerprint;
   }
 
   return msalInstance;
 }
 
-export function hasMicrosoftLoginConfig() {
-  return Boolean(clientId);
+export function hasMicrosoftLoginConfig(runtimeConfig?: MicrosoftAuthRuntimeConfig) {
+  return Boolean(resolveConfig(runtimeConfig).clientId);
 }
 
-export async function loginAndAcquireGraphToken() {
-  const instance = getInstance();
+export async function loginAndAcquireGraphToken(runtimeConfig?: MicrosoftAuthRuntimeConfig) {
+  const instance = getInstance(runtimeConfig);
   await instance.initialize();
 
   let account = instance.getActiveAccount() ?? instance.getAllAccounts()[0] ?? null;
