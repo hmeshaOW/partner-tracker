@@ -50,6 +50,8 @@ Frontend `.env` values:
 - `VITE_ENTRA_TENANT_ID`
 - `VITE_ENTRA_REDIRECT_URI`
 
+See `documentation/entra-app-registration.md` for the exact Entra SPA configuration and CLI commands.
+
 ### 2) Backend
 
 ```bash
@@ -74,6 +76,8 @@ Minimum Graph scopes expected:
 - `User.Read`
 
 The frontend supports Microsoft sign-in through MSAL when the Entra settings above are provided. A manual token paste fallback remains available.
+
+If your tenant blocks self-service app registration, use the manual admin-assisted setup documented in `documentation/entra-app-registration.md`.
 
 ## Weekly Report Workflow
 
